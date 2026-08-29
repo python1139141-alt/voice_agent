@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AI Voice Agent Live Dashboard</title>
+  <style>
+    :root {
+      --bg: #0d1117;
+      --panel: #161b22;
+      --panel-2: #1c2230;
+      --border: #2a3140;
+      --text: #e6edf3;
+      --muted: #8b949e;
+      --user: #1f6feb;
+      --bot: #21262d;
+      --accent: #3fb950;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+    header {
+      padding: 16px 22px;
+      background: var(--panel);
+      border-bottom: 1px solid var(--border);
+      font-size: 20px;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    header .dot {
+      width: 10px; height: 10px; border-radius: 50%;
+      background: var(--accent);
+      box-shadow: 0 0 10px var(--accent);
+      animation: pulse 1.6s infinite;
+    }
+    @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: .3; } }
+
+    .container {
+      flex: 1;
+      display: grid;
+      grid-template-columns: 1fr 340px;
+      gap: 16px;
+      padding: 16px;
+      min-height: 0;
+    }
+    @media (max-width: 820px) {
+      .container { grid-template-columns: 1fr; }
+    }
+
+    .chat {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 16px;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    .bubble {
+      max-width: 80%;
+      padding: 10px 14px;
+      border-radius: 14px;
+      line-height: 1.4;
+      white-space: pre-wrap;
+      word-wrap: break-word;
+      font-size: 15px;
+    }
+    .bubble.user {
+      align-self: flex-end;
+      background: var(--user);
+      color: #fff;
+      border-bottom-right-radius: 4px;
+    }
+    .bubble.assistant {
+      align-self: flex-start;
+      background: var(--bot);
+      border: 1px solid var(--border);
+      border-bottom-left-radius: 4px;
+    }
+    .bubble .who {
+      display: block;
+      font-size: 11px;
+      opacity: .65;
+      margin-bottom: 4px;
+      text-transform: uppercase;
+      letter-spacing: .5px;
+    }
+
+    .sidebar { display: flex; flex-direction: column; gap: 16px; min-height: 0; }
+    .lead-card {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 16px;
+    }
+    .lead-card h2 {
+      margin: 0 0 12px;
+      font-size: 15px;
+      color: var(--muted);
+      font-weight: 600;
+    }
+    .badge {
+      display: none;
+      align-items: center;
+      gap: 8px;
+      background: rgba(63,185,80,.12);
+      color: var(--accent);
+      border: 1px solid var(--accent);
+      border-radius: 999px;
+      padding: 6px 12px;
+      font-size: 13px;
+      font-weight: 600;
+      margin-bottom: 14px;
+    }
+    .badge.show { display: inline-flex; }
+    .badge .led {
+      width: 8px; height: 8px; border-radius: 50%; background: var(--accent);
+      box-shadow: 0 0 8px var(--accent);
+    }
+    .field { margin-bottom: 12px; }
+    .field label {
+      display: block;
+      font-size: 11px;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: .5px;
+      margin-bottom: 4px;
+    }
+    .field .value {
+      font-size: 15px;
+      color: var(--text);
+      word-break: break-word;
+    }
+    .status-line {
+      font-size: 13px;
+      color: var(--muted);
+    }
+    .conn {
+      font-size: 12px;
+      color: var(--muted);
+      padding: 0 22px 12px;
+    }
+    .conn b { color: var(--accent); }
+  </style>
+</head>
+<body>
+  <header>
+    <span class="dot"></span>
+    🎙️ AI Voice Agent Live Dashboard
+  </header>
+
+  <div class="container">
+    <div class="chat" id="chat">
+      <div class="bubble assistant"><span class="who">Bot</span>Waiting for the conversation to start…</div>
+    </div>
+
+    <div class="sidebar">
+      <div class="lead-card">
+        <h2>Lead Data Status</h2>
+        <div class="badge" id="leadBadge"><span class="led"></span> Lead Captured</div>
+        <div id="leadFields" style="display:none;">
+          <div class="field">
+            <label>Name</label>
+            <div class="value" id="leadName">—</div>
+          </div>
+          <div class="field">
+            <label>Phone</label>
+            <div class="value" id="leadPhone">—</div>
+          </div>
+          <div class="field">
+            <label>Service Requested</label>
+            <div class="value" id="leadService">—</div>
+          </div>
+        </div>
+        <div class="status-line" id="leadStatus">No lead captured yet.</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="conn">WebSocket: <b id="connState">connecting…</b> ws://localhost:8765</div>
+
+  <script>
+    const chat = document.getElementById("chat");
+    const connState = document.getElementById("connState");
+    const leadBadge = document.getElementById("leadBadge");
+    const leadFields = document.getElementById("leadFields");
+    const leadStatus = document.getElementById("leadStatus");
+    const leadName = document.getElementById("leadName");
+    const leadPhone = document.getElementById("leadPhone");
+    const leadService = document.getElementById("leadService");
+
+    function scrollToBottom() {
+      chat.scrollTop = chat.scrollHeight;
+    }
+
+    function addBubble(role, text) {
+      // If the last bubble is the same role, append to it for a continuous turn.
+      const last = chat.lastElementChild;
+      if (last && last.dataset.role === role) {
+        last.querySelector(".text").textContent += text;
+        scrollToBottom();
+        return;
+      }
+      const bubble = document.createElement("div");
+      bubble.className = "bubble " + role;
+      bubble.dataset.role = role;
+      const who = document.createElement("span");
+      who.className = "who";
+      who.textContent = role === "user" ? "You" : "Bot";
+      const body = document.createElement("span");
+      body.className = "text";
+      body.textContent = text;
+      bubble.appendChild(who);
+      bubble.appendChild(body);
+      chat.appendChild(bubble);
+      scrollToBottom();
+    }
+
+    function showLead(data) {
+      leadBadge.classList.add("show");
+      leadFields.style.display = "block";
+      leadStatus.textContent = "A lead was successfully captured and sent.";
+      leadName.textContent = data.name || "—";
+      leadPhone.textContent = data.phone || "—";
+      leadService.textContent = data.service || "—";
+    }
+
+    function connect() {
+      const ws = new WebSocket("ws://localhost:8765");
+      ws.onopen = () => { connState.textContent = "connected"; };
+      ws.onclose = () => {
+        connState.textContent = "disconnected — retrying…";
+        setTimeout(connect, 1500);
+      };
+      ws.onerror = () => { connState.textContent = "error"; };
+      ws.onmessage = (event) => {
+        let msg;
+        try { msg = JSON.parse(event.data); } catch (e) { return; }
+        if (msg.type === "transcript") {
+          addBubble(msg.role === "user" ? "user" : "assistant", msg.text);
+        } else if (msg.type === "lead_captured") {
+          showLead(msg);
+        }
+      };
+    }
+
+    connect();
+  </script>
+</body>
+</html>
