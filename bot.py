@@ -4,7 +4,7 @@
 # Architecture:
 #   Deepgram STT -> Groq LLM (OpenAI-compatible) -> Deepgram TTS
 #   Transport: local microphone/speaker audio via PyAudio
-#   Tool: send_lead_to_make -> POST to a Make.com webhook
+#   Tool: submit_user_request -> POST to a Make.com webhook
 #   Side channel: WebSocket broadcast server (ws://localhost:8765) for a live web UI
 #
 
@@ -62,28 +62,21 @@ GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 MAKE_WEBHOOK_URL = os.getenv("MAKE_WEBHOOK_URL")
 
 SYSTEM_PROMPT = """
-You are a friendly phone receptionist for a business. Hold a natural, human-like voice conversation.
+You are a professional voice receptionist for a business. Speak like a real human in short, warm, natural sentences. Never use markdown, bullet points, numbered lists, or special characters.
 
-COLLECT THREE THINGS, ONE AT A TIME:
-- The customer's full name
-- Their phone number
-- The service they are requesting
+You handle two kinds of requests: appointments and complaints. Understand the caller's intent from what they say and do not make them state the exact word.
 
-CONVERSATION STYLE:
-- Ask for only ONE piece of information per turn. Wait for the customer's reply before moving on.
-- Do not repeat a question if the customer already answered it.
-- Keep replies short (one or two sentences). Never use numbered lists, bullet points, markdown, or special characters.
-- If an answer is unclear, ask one short clarification question.
+Run the conversation naturally. Ask for only one piece of information per turn and wait for the reply before continuing. Do not repeat a question the caller already answered. Acknowledge what the caller said briefly, and if something is unclear ask one short clarification question. Keep your replies to one or two sentences.
 
-PHONE NUMBERS:
-- Customers often say numbers as words, e.g. "nineteen twenty three" or "zero three zero zero". Convert spoken number words into digits yourself.
-- When you believe you have the number, read it back digit by digit and ask the customer to confirm, e.g. "Is that zero one two three four five six seven eight nine?".
-- If any digit is ambiguous or missing, ask the customer to repeat just that part. Never invent or guess missing digits.
-- Only call send_lead_to_make after the phone number has been clearly confirmed by the customer.
+For an appointment, collect these one at a time: the caller's full name, their phone number, the requested date and time, and any extra details. Today is Saturday, August 29, 2026. When the caller gives a relative date or time you MUST calculate the exact calendar date from today's date: for example, today is Saturday August 29 2026, so tomorrow is Sunday August 30 2026, Monday this week is Monday August 31 2026, and next Monday is Monday September 7 2026. For the date_time argument that you pass to submit_user_request, you MUST convert the date and time into strict ISO 8601 format YYYY-MM-DDTHH:MM:SS using 24 hour clock. For example, if today is August 29 2026 and the caller says tomorrow at 1 PM, date_time must be exactly 2026-08-30T13:00:00. Never send raw English text such as tomorrow 1pm, Monday at 2pm, or next week. If the date or time is ambiguous, ask a short clarification and never invent one. Before submitting, you MUST confirm the calculated date and time conversationally with the caller, for example say so that's tomorrow, Sunday, August 30 at 1 PM, right and only proceed after they agree.
 
-DATA INTEGRITY:
-- Never use placeholders like [NAME] or [PHONE].
-- Only save real, confirmed values. Call send_lead_to_make exactly once, after the name, phone number, and service are all confirmed.
+For a complaint, collect these one at a time: the complaint details, the caller's full name, and their phone number. A date and time is not required for a complaint unless the caller naturally gives one, so do not force it. Before submitting, confirm the complaint details, name, and phone.
+
+Phone numbers: callers often say numbers as words, for example zero three zero zero one two three. Convert spoken number words into digits yourself. When you have the number, read it back digit by digit and ask the caller to confirm. Never guess or invent missing digits; if any part is ambiguous, ask the caller to repeat that part.
+
+Data integrity: never use placeholders such as [NAME], [PHONE], [DATE], or [DETAILS]. Only call the submit_user_request tool after the needed information is collected and confirmed by the caller. If a required field is missing, keep asking for it naturally. Never submit fake or guessed data.
+
+Always confirm the key details conversationally before calling submit_user_request. If the caller corrects something, update it and confirm again before submitting, and do not submit outdated or incorrect information.
 """
 
 WS_PORT = 8765
@@ -299,49 +292,80 @@ class SpeakingStateController(FrameProcessor):
 # Tool: capture lead and forward to Make.com
 # ---------------------------------------------------------------------------
 def _is_placeholder(value) -> bool:
-    """Reject empty values or obvious placeholder tokens."""
+    """Reject empty values or obvious placeholder/fake tokens."""
     if not isinstance(value, str) or not value.strip():
         return True
-    v = value.strip()
-    if v.lower() in ("[name]", "[phone]", "[service]", "[service requested]", "none", "n/a", "null"):
+    v = value.strip().lower()
+    if v in (
+        "[name]", "[phone]", "[date]", "[date_time]", "[datetime]", "[details]",
+        "[service]", "[service requested]", "none", "n/a", "null",
+        "unknown", "test", "testing", "placeholder", "example",
+    ):
         return True
     if "[" in v or "]" in v:
         return True
     return False
 
 
-async def send_lead_to_make(
+async def submit_user_request(
     params: FunctionCallParams,
-    customer_name: str,
-    phone_number: str,
-    service_requested: str,
+    type: str,
+    name: str,
+    phone: str,
+    date_time: str,
+    details: str,
 ) -> None:
-    """Send the captured lead details to Make.com via webhook.
+    """Submit a customer request (appointment or complaint) to the backend.
+
+    Only call this after the required details have been collected AND confirmed
+    with the caller. For appointments, ``date_time`` is required; for complaints
+    it may be left empty.
 
     Args:
-        customer_name: The customer's full name.
-        phone_number: The customer's contact phone number.
-        service_requested: The service or product the customer is interested in.
+        type: "appointment" or "complaint".
+        name: The caller's full name.
+        phone: The caller's phone number as digits.
+        date_time: Requested appointment date and time (empty string for complaints).
+        details: For appointments, any extra info; for complaints, the complaint text.
     """
-    # Guard: never POST placeholders or missing values.
-    if _is_placeholder(customer_name) or _is_placeholder(phone_number) or _is_placeholder(service_requested):
-        logger.warning("Refusing send_lead_to_make: placeholder/missing argument detected")
+    # Guard: never POST placeholders or missing required fields.
+    if (
+        _is_placeholder(type)
+        or _is_placeholder(name)
+        or _is_placeholder(phone)
+        or _is_placeholder(details)
+    ):
+        logger.warning("Refusing submit_user_request: placeholder/missing required field")
         await params.result_callback(
             {
                 "status": "error",
                 "message": (
-                    "I'm missing some real details. Please tell me your actual name, "
-                    "phone number, and the service you need before I save anything."
+                    "I'm missing some real details. Please provide your name, phone "
+                    "number, and the request details before I submit."
+                ),
+            }
+        )
+        return
+    # Appointments require a date/time; complaints do not.
+    if type == "appointment" and _is_placeholder(date_time):
+        logger.warning("Refusing submit_user_request: appointment missing date_time")
+        await params.result_callback(
+            {
+                "status": "error",
+                "message": (
+                    "I still need the date and time of your appointment before I can "
+                    "submit it."
                 ),
             }
         )
         return
 
     payload = {
-        "customer_name": customer_name,
-        "phone_number": phone_number,
-        "service_requested": service_requested,
-        "status": "testing_connection",
+        "type": type,
+        "name": name,
+        "phone": phone,
+        "date_time": date_time or "",
+        "details": details or "",
     }
 
     try:
@@ -350,28 +374,38 @@ async def send_lead_to_make(
                 await response.read()
                 logger.info(f"Make webhook responded with status {response.status}")
     except Exception as e:
-        logger.error(f"Failed to POST lead to Make webhook: {e}")
+        logger.error(f"Failed to POST request to Make webhook: {e}")
+        # Do NOT falsely confirm success.
+        await params.result_callback(
+            {
+                "status": "error",
+                "message": (
+                    "I'm sorry, I wasn't able to submit that right now. Please try again."
+                ),
+            }
+        )
+        return
 
-    # Notify the Live Chat UI that a lead was captured.
+    # Notify the Live Chat UI that a request was captured.
     await broadcaster.send(
         {
-            "type": "lead_captured",
-            "name": customer_name,
-            "phone": phone_number,
-            "service": service_requested,
+            "type": "request_captured",
+            "request_type": type,
+            "name": name,
+            "phone": phone,
+            "date_time": date_time or "",
+            "details": details or "",
+            "status": "submitted",
         }
     )
 
-    # Hand a confirmation message back to the LLM so it can tell the user.
-    await params.result_callback(
-        {
-            "status": "success",
-            "message": (
-                f"Received the details for {customer_name}: phone number {phone_number}, "
-                f"service requested '{service_requested}'. The lead has been sent."
-            ),
-        }
+    # Hand a natural confirmation back to the LLM (no technical details).
+    success_msg = (
+        "Perfect, I've submitted your appointment request."
+        if type == "appointment"
+        else "Thank you. I've submitted your complaint successfully."
     )
+    await params.result_callback({"status": "success", "message": success_msg})
 
 
 # ---------------------------------------------------------------------------
@@ -454,7 +488,7 @@ async def main() -> None:
     #    (the universal aggregator does not reliably merge `settings.system_instruction`).
     context = LLMContext(
         messages=[{"role": "system", "content": SYSTEM_PROMPT}],
-        tools=[send_lead_to_make],
+        tools=[submit_user_request],
     )
     #    The user-aggregator params class is `LLMUserAggregatorParams` (not
     #    `LLMUserAggregator.Params`). CRITICAL: `user_turn_stop_timeout` is a HARD
@@ -524,7 +558,7 @@ async def main() -> None:
         logger.info("Pipeline started - greeting the user")
         # Hidden user prompt forces the first assistant turn.
         context.add_message(
-            {"role": "user", "content": "Please greet me warmly and ask for my name."}
+            {"role": "user", "content": "Greet the caller warmly and ask how you can help them today."}
         )
         # Trigger Groq via the universal aggregator's run frame.
         await worker.queue_frames([LLMRunFrame()])

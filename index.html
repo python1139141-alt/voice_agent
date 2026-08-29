@@ -166,9 +166,13 @@
 
     <div class="sidebar">
       <div class="lead-card">
-        <h2>Lead Data Status</h2>
-        <div class="badge" id="leadBadge"><span class="led"></span> Lead Captured</div>
+        <h2>Request Data Status</h2>
+        <div class="badge" id="leadBadge"><span class="led"></span> Request Captured</div>
         <div id="leadFields" style="display:none;">
+          <div class="field">
+            <label>Type</label>
+            <div class="value" id="leadType">—</div>
+          </div>
           <div class="field">
             <label>Name</label>
             <div class="value" id="leadName">—</div>
@@ -178,11 +182,19 @@
             <div class="value" id="leadPhone">—</div>
           </div>
           <div class="field">
-            <label>Service Requested</label>
-            <div class="value" id="leadService">—</div>
+            <label>Date / Time</label>
+            <div class="value" id="leadDateTime">—</div>
+          </div>
+          <div class="field">
+            <label>Details</label>
+            <div class="value" id="leadDetails">—</div>
+          </div>
+          <div class="field">
+            <label>Status</label>
+            <div class="value" id="leadStatusVal">—</div>
           </div>
         </div>
-        <div class="status-line" id="leadStatus">No lead captured yet.</div>
+        <div class="status-line" id="leadStatus">No request captured yet.</div>
       </div>
     </div>
   </div>
@@ -197,7 +209,10 @@
     const leadStatus = document.getElementById("leadStatus");
     const leadName = document.getElementById("leadName");
     const leadPhone = document.getElementById("leadPhone");
-    const leadService = document.getElementById("leadService");
+    const leadType = document.getElementById("leadType");
+    const leadDateTime = document.getElementById("leadDateTime");
+    const leadDetails = document.getElementById("leadDetails");
+    const leadStatusVal = document.getElementById("leadStatusVal");
 
     function scrollToBottom() {
       chat.scrollTop = chat.scrollHeight;
@@ -229,10 +244,14 @@
     function showLead(data) {
       leadBadge.classList.add("show");
       leadFields.style.display = "block";
-      leadStatus.textContent = "A lead was successfully captured and sent.";
+      const type = data.request_type || data.type || "—";
+      leadType.textContent = type.charAt(0).toUpperCase() + type.slice(1);
       leadName.textContent = data.name || "—";
       leadPhone.textContent = data.phone || "—";
-      leadService.textContent = data.service || "—";
+      leadDateTime.textContent = data.date_time || "—";
+      leadDetails.textContent = data.details || "—";
+      leadStatusVal.textContent = (data.status || "submitted").toUpperCase();
+      leadStatus.textContent = "A request was successfully captured and sent.";
     }
 
     function connect() {
@@ -248,7 +267,7 @@
         try { msg = JSON.parse(event.data); } catch (e) { return; }
         if (msg.type === "transcript") {
           addBubble(msg.role === "user" ? "user" : "assistant", msg.text);
-        } else if (msg.type === "lead_captured") {
+        } else if (msg.type === "request_captured") {
           showLead(msg);
         }
       };
