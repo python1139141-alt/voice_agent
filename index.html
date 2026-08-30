@@ -3,47 +3,89 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>AI Voice Agent Live Dashboard</title>
+  <title>AREZENS — Live Dashboard</title>
   <style>
     :root {
-      --bg: #0d1117;
-      --panel: #161b22;
-      --panel-2: #1c2230;
-      --border: #2a3140;
-      --text: #e6edf3;
-      --muted: #8b949e;
-      --user: #1f6feb;
-      --bot: #21262d;
-      --accent: #3fb950;
+      --bg: #0a0e17;
+      --panel: #111827;
+      --panel-2: #1a2235;
+      --border: #1e2d44;
+      --text: #e2e8f0;
+      --muted: #64748b;
+      --user: #2563eb;
+      --bot: #131c2e;
+      --accent: #06b6d4;
+      --accent-dim: rgba(6,182,212,.12);
+      --accent-glow: rgba(6,182,212,.25);
+      --success: #10b981;
+      --success-dim: rgba(16,185,129,.12);
+      --danger: #ef4444;
+      --header-accent: linear-gradient(135deg, #0f172a 0%, #111827 100%);
     }
-    * { box-sizing: border-box; }
+    * { box-sizing: border-box; margin: 0; }
     body {
-      margin: 0;
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
       background: var(--bg);
       color: var(--text);
       height: 100vh;
       display: flex;
       flex-direction: column;
     }
+
+    /* ── Header ──────────────────────────────────────────────── */
     header {
-      padding: 16px 22px;
-      background: var(--panel);
+      padding: 14px 24px;
+      background: var(--header-accent);
       border-bottom: 1px solid var(--border);
-      font-size: 20px;
-      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+    .brand {
       display: flex;
       align-items: center;
       gap: 10px;
     }
-    header .dot {
-      width: 10px; height: 10px; border-radius: 50%;
-      background: var(--accent);
-      box-shadow: 0 0 10px var(--accent);
-      animation: pulse 1.6s infinite;
+    .brand-name {
+      font-size: 20px;
+      font-weight: 700;
+      letter-spacing: 3px;
+      text-transform: uppercase;
+      color: var(--accent);
     }
-    @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: .3; } }
+    .brand-tagline {
+      font-size: 11px;
+      color: var(--muted);
+      letter-spacing: .8px;
+      text-transform: uppercase;
+      border-left: 1px solid var(--border);
+      padding-left: 14px;
+      margin-left: 4px;
+    }
+    .header-right {
+      margin-left: auto;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .status-dot {
+      width: 8px; height: 8px; border-radius: 50%;
+      background: var(--success);
+      box-shadow: 0 0 8px var(--success);
+      animation: pulse 1.8s infinite;
+    }
+    .status-dot.offline {
+      background: var(--danger);
+      box-shadow: 0 0 8px var(--danger);
+    }
+    @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: .35; } }
+    .status-label {
+      font-size: 12px;
+      color: var(--muted);
+      letter-spacing: .3px;
+    }
 
+    /* ── Layout ──────────────────────────────────────────────── */
     .container {
       flex: 1;
       display: grid;
@@ -56,24 +98,25 @@
       .container { grid-template-columns: 1fr; }
     }
 
+    /* ── Chat Panel ──────────────────────────────────────────── */
     .chat {
       background: var(--panel);
       border: 1px solid var(--border);
-      border-radius: 12px;
+      border-radius: 10px;
       padding: 16px;
       overflow-y: auto;
       display: flex;
       flex-direction: column;
-      gap: 12px;
+      gap: 10px;
     }
     .bubble {
       max-width: 80%;
       padding: 10px 14px;
-      border-radius: 14px;
-      line-height: 1.4;
+      border-radius: 10px;
+      line-height: 1.45;
       white-space: pre-wrap;
       word-wrap: break-word;
-      font-size: 15px;
+      font-size: 14px;
     }
     .bubble.user {
       align-self: flex-end;
@@ -89,84 +132,122 @@
     }
     .bubble .who {
       display: block;
-      font-size: 11px;
-      opacity: .65;
+      font-size: 10px;
+      opacity: .6;
       margin-bottom: 4px;
       text-transform: uppercase;
-      letter-spacing: .5px;
-    }
-
-    .sidebar { display: flex; flex-direction: column; gap: 16px; min-height: 0; }
-    .lead-card {
-      background: var(--panel);
-      border: 1px solid var(--border);
-      border-radius: 12px;
-      padding: 16px;
-    }
-    .lead-card h2 {
-      margin: 0 0 12px;
-      font-size: 15px;
-      color: var(--muted);
+      letter-spacing: .8px;
       font-weight: 600;
     }
+
+    /* ── Sidebar ─────────────────────────────────────────────── */
+    .sidebar { display: flex; flex-direction: column; gap: 16px; min-height: 0; }
+
+    .card {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 16px;
+    }
+    .card-header {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 14px;
+    }
+    .card-icon {
+      width: 20px; height: 20px;
+      border-radius: 5px;
+      background: var(--accent-dim);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 11px;
+    }
+    .card-title {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: .8px;
+    }
+
     .badge {
       display: none;
       align-items: center;
       gap: 8px;
-      background: rgba(63,185,80,.12);
-      color: var(--accent);
-      border: 1px solid var(--accent);
-      border-radius: 999px;
-      padding: 6px 12px;
-      font-size: 13px;
+      background: var(--success-dim);
+      color: var(--success);
+      border: 1px solid var(--success);
+      border-radius: 6px;
+      padding: 7px 12px;
+      font-size: 12px;
       font-weight: 600;
       margin-bottom: 14px;
     }
     .badge.show { display: inline-flex; }
     .badge .led {
-      width: 8px; height: 8px; border-radius: 50%; background: var(--accent);
-      box-shadow: 0 0 8px var(--accent);
+      width: 7px; height: 7px; border-radius: 50%; background: var(--success);
+      box-shadow: 0 0 6px var(--success);
     }
+
     .field { margin-bottom: 12px; }
     .field label {
       display: block;
-      font-size: 11px;
+      font-size: 10px;
       color: var(--muted);
       text-transform: uppercase;
-      letter-spacing: .5px;
-      margin-bottom: 4px;
+      letter-spacing: .7px;
+      margin-bottom: 3px;
+      font-weight: 500;
     }
     .field .value {
-      font-size: 15px;
+      font-size: 14px;
       color: var(--text);
       word-break: break-word;
+      line-height: 1.4;
     }
     .status-line {
-      font-size: 13px;
-      color: var(--muted);
-    }
-    .conn {
       font-size: 12px;
       color: var(--muted);
-      padding: 0 22px 12px;
+      margin-top: 4px;
     }
-    .conn b { color: var(--accent); }
+
+    /* ── Connection Bar ──────────────────────────────────────── */
+    .conn {
+      font-size: 11px;
+      color: var(--muted);
+      padding: 0 24px 10px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .conn b { color: var(--accent); font-weight: 600; }
   </style>
 </head>
 <body>
   <header>
-    <span class="dot"></span>
-    🎙️ AI Voice Agent Live Dashboard
+    <div class="brand">
+      <span class="brand-name">AREZENS</span>
+      <span class="brand-tagline">Elite Cybersecurity &amp; Technology Services</span>
+    </div>
+    <div class="header-right">
+      <div class="status-dot" id="statusDot"></div>
+      <span class="status-label" id="statusLabel">Connecting…</span>
+    </div>
   </header>
 
   <div class="container">
     <div class="chat" id="chat">
-      <div class="bubble assistant"><span class="who">Bot</span>Waiting for the conversation to start…</div>
+      <div class="bubble assistant"><span class="who">AREZENS</span>Waiting for the conversation to start…</div>
     </div>
 
     <div class="sidebar">
-      <div class="lead-card">
-        <h2>Request Data Status</h2>
+      <div class="card">
+        <div class="card-header">
+          <div class="card-icon">&#9670;</div>
+          <span class="card-title">Client Request Status</span>
+        </div>
         <div class="badge" id="leadBadge"><span class="led"></span> Request Captured</div>
         <div id="leadFields" style="display:none;">
           <div class="field">
@@ -204,6 +285,8 @@
   <script>
     const chat = document.getElementById("chat");
     const connState = document.getElementById("connState");
+    const statusDot = document.getElementById("statusDot");
+    const statusLabel = document.getElementById("statusLabel");
     const leadBadge = document.getElementById("leadBadge");
     const leadFields = document.getElementById("leadFields");
     const leadStatus = document.getElementById("leadStatus");
@@ -219,7 +302,6 @@
     }
 
     function addBubble(role, text) {
-      // If the last bubble is the same role, append to it for a continuous turn.
       const last = chat.lastElementChild;
       if (last && last.dataset.role === role) {
         last.querySelector(".text").textContent += text;
@@ -231,7 +313,7 @@
       bubble.dataset.role = role;
       const who = document.createElement("span");
       who.className = "who";
-      who.textContent = role === "user" ? "You" : "Bot";
+      who.textContent = role === "user" ? "You" : "AREZENS";
       const body = document.createElement("span");
       body.className = "text";
       body.textContent = text;
@@ -251,17 +333,33 @@
       leadDateTime.textContent = data.date_time || "—";
       leadDetails.textContent = data.details || "—";
       leadStatusVal.textContent = (data.status || "submitted").toUpperCase();
-      leadStatus.textContent = "A request was successfully captured and sent.";
+      leadStatus.textContent = "Request successfully captured and submitted.";
+    }
+
+    function setConnected(connected) {
+      if (connected) {
+        statusDot.classList.remove("offline");
+        statusLabel.textContent = "Live";
+        connState.textContent = "connected";
+      } else {
+        statusDot.classList.add("offline");
+        statusLabel.textContent = "Offline";
+        connState.textContent = "disconnected — retrying…";
+      }
     }
 
     function connect() {
       const ws = new WebSocket("ws://localhost:8765");
-      ws.onopen = () => { connState.textContent = "connected"; };
+      ws.onopen = () => { setConnected(true); };
       ws.onclose = () => {
-        connState.textContent = "disconnected — retrying…";
+        setConnected(false);
         setTimeout(connect, 1500);
       };
-      ws.onerror = () => { connState.textContent = "error"; };
+      ws.onerror = () => {
+        statusDot.classList.add("offline");
+        statusLabel.textContent = "Error";
+        connState.textContent = "error";
+      };
       ws.onmessage = (event) => {
         let msg;
         try { msg = JSON.parse(event.data); } catch (e) { return; }
